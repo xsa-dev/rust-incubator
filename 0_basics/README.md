@@ -11,22 +11,56 @@ Read through [the Cargo Book][Cargo Book] and become familiar with [Cargo] and i
 
 After completing these steps, you should be able to answer (and understand why) the following questions:
 - What memory model does [Rust] have? Is it single-threaded or multiple-threaded? Is it synchronous or asynchronous?
+
+
 - What runtime does [Rust] have? Does it use a GC (garbage collector)?
+
+
 - What does static typing mean? What is a benefit of using it?
+
+
 - What are generics and parametric polymorphism? Which problems do they solve?
+
+
 - What are traits? How are they used? How do they compare to interfaces? What are auto traits and blanket impls? What is a marker trait?
+
+
 - What are static and dynamic dispatch? Which should you use, and when?
+
+
 - What is a crate and what is a module in [Rust]? How do they differ? How are they used?
+
+
 - What are move semantics? What are borrowing rules? What is the benefit of using them?
+
+
 - What is immutability? What is the benefit of using it?
+
+
 - What is cloning? What is copying? How do they compare?
+
+
 - What is RAII? How is it implemented in [Rust]? What is the benefit of using it?
+
+
 - What is an iterator? What is a collection? How do they differ? How are they used?
+
+
 - What are macros? Which problems do they solve? What is the difference between declarative and procedural macros?
+
+
 - How is code tested in [Rust]? Where should you put tests and why?
+
+
 - Why does [Rust] have `&str` and `String` types? How do they differ? When should you use them?
+
+
 - What are lifetimes? Which problems do they solve? Which benefits do they give?
+
+
 - Is [Rust] an OOP language? Is it possible to use SOLID/GRASP? Does it have inheritance?
+
+
 
 _Additional_ articles, which may help to understand the above topic better:
 - [George He: Thinking in Rust: Ownership, Access, and Memory Safety][19]
