@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "0_basics/day01_ownership_borrowing",
+    "0_basics/day02_building_abstractions",
     "1_concepts",
     "1_concepts/1_*",
     "2_idioms",
