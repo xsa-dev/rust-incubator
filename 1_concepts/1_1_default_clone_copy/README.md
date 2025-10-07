@@ -3,16 +3,18 @@ Step 1.1: Default values, cloning and copying
 
 __Estimated time__: 1 day
 
-
-
-
 ## Default values
 
-[Rust] has a standard way to deal with default values of a type via the [`Default`] trait. Read through [its official docs][`Default`] to understand the design.
+[Rust] has a standard way to deal with default values of a type via the [`Default`] trait. Read
+through [its official docs][`Default`] to understand the design.
 
-It can be auto-derived, but only for a `struct` whose members all have [`Default`] implementations. It is implemented for a great many types in the standard library, and also used in a surprising number of places. So if your type has a value that can be construed as being "default", it is a good idea to implement this trait.
+It can be auto-derived, but only for a `struct` whose members all have [`Default`] implementations. It is implemented
+for a great many types in the standard library, and also used in a surprising number of places. So if your type has a
+value that can be construed as being "default", it is a good idea to implement this trait.
 
-If you're not satisfied with [std] deriving capabilities for [`Default`], consider using the [smart-default] crate. An example is quite self-explanatory:
+If you're not satisfied with [std] deriving capabilities for [`Default`], consider using the [smart-default] crate. An
+example is quite self-explanatory:
+
 ```rust
 #[derive(SmartDefault)]
 enum Foo {
@@ -33,63 +35,96 @@ enum Foo {
 }
 ```
 
-A great thing is that with a [`Default`] implementation you can instantiate your `struct` with only the non-default values and have all other fields filled with default values:
+A great thing is that with a [`Default`] implementation you can instantiate your `struct` with only the non-default
+values and have all other fields filled with default values:
+
 ```rust
-let x = Foo { bar: baz, ..Default::default() };
+let x = Foo { bar: baz,..Default::default () };
 ```
-
-
-
 
 ## Cloning and copying
 
 By default, all types in [Rust] follow ['move semantics'][1].
 
-If you need a duplicate of a value, then its type should implement [`Clone`] trait (see [official docs][`Clone`]), and a duplicate is created by calling [`Clone`] methods __explicitly__. Cloning can be __either a cheap or an expensive__ operation depending on type semantics.
+If you need a duplicate of a value, then its type should implement [`Clone`] trait (see [official docs][`Clone`]), and a
+duplicate is created by calling [`Clone`] methods __explicitly__. Cloning can be __either a cheap or an expensive__
+operation depending on type semantics.
 
-However, the [`Copy`] marker trait (see [official docs][`Copy`]) enables 'copy semantics' for a type, so a value is __copied implicitly__ every time it is passed. That's why copying must always perform a __simple bit-to-bit copy operation__.
+However, the [`Copy`] marker trait (see [official docs][`Copy`]) enables 'copy semantics' for a type, so a value is _
+_copied implicitly__ every time it is passed. That's why copying must always perform a __simple bit-to-bit copy
+operation__.
 
 [Official `Copy` docs][`Copy`] are quite explanatory about which types _should_ be [`Copy`] and which types _cannot_:
 
-> Some types can't be copied safely. For example, copying `&mut T` would create an aliased mutable reference. Copying `String` would duplicate responsibility for managing the `String`'s buffer, leading to a double free.
-> 
-> Generalizing the latter case, any type implementing `Drop` can't be `Copy`, because it's managing some resource besides its own `size_of::<T>` bytes.
+> Some types can't be copied safely. For example, copying `&mut T` would create an aliased mutable reference. Copying
+`String` would duplicate responsibility for managing the `String`'s buffer, leading to a double free.
+>
+> Generalizing the latter case, any type implementing `Drop` can't be `Copy`, because it's managing some resource
+> besides its own `size_of::<T>` bytes.
 
-> Generally speaking, if your type can implement `Copy`, it should. Keep in mind, though, that implementing `Copy` is part of the public API of your type. If the type might become non-`Copy` in the future, it could be prudent to omit the `Copy` implementation now, to avoid a breaking API change.
+> Generally speaking, if your type can implement `Copy`, it should. Keep in mind, though, that implementing `Copy` is
+> part of the public API of your type. If the type might become non-`Copy` in the future, it could be prudent to omit
+> the
+`Copy` implementation now, to avoid a breaking API change.
 
 To better understand the topic, read through:
+
 - [Official `Clone` docs][`Clone`]
 - [Official `Copy` docs][`Copy`]
 - [HashRust: Moves, copies and clones in Rust][2]
 
-
-
-
 ## Task
 
 - Create a `Point` type which represents a 2D point (`x` and `y` coordinates). This type has to be `Copy` and `Default`.
-- Create a `Polyline` type which represents a non-empty set of `Point`s of unknown size. This type has to be `Clone` and non-`Default`.
-
-
-
+- Create a `Polyline` type which represents a non-empty set of `Point`s of unknown size. This type has to be `Clone` and
+  non-`Default`.
 
 ## Questions
 
 After completing everything above, you should be able to answer (and understand why) the following questions:
+
 - What purpose does the [`Default`] trait serve in [Rust]?
+
+_Defines a type’s default value.
+Used when objects can be initialized with reasonable defaults.
+Can be called with Type::default() or ..Default::default().
+Requires all fields to be Default. For enums, mark one variant with #[default]._
+
 - What is `#[derive(Default)]` from `std` capable of? What does it wrong? Which are alternatives?
+
+_Auto-implements Default by calling Default::default() for each field.
+❌ Fails if any field isn’t Default.
+❌ Can’t set custom values.
+✅ Alternatives: write a manual impl Default, or use ..Default::default()._
+
 - What does [`Clone`] mean semantically?
+
+_Creates a deep copy — a new, independent object.
+Used for types owning data (String, Vec, etc.).
+Explicit call (clone()) because it may be expensive._
+
 - What does [`Copy`] mean semantically? How is it connected with [`Clone`]? Which limitations does it have and why?
 
-
+_Performs bitwise copy, cheap and implicit.
+Copy implies Clone, but not vice versa.
+Limitations:
+• all fields must be Copy;
+• no Drop;
+• not for heap-owning types (String, Vec, etc.)._
 
 
 [`Clone`]: https://doc.rust-lang.org/std/clone/trait.Clone.html
+
 [`Copy`]: https://doc.rust-lang.org/std/marker/trait.Copy.html
+
 [`Default`]: https://doc.rust-lang.org/std/default/trait.Default.html
+
 [std]: https://doc.rust-lang.org/stable/std
+
 [smart-default]: https://docs.rs/smart-default
+
 [Rust]: https://www.rust-lang.org
 
 [1]: https://stackoverflow.com/a/30290070/1828012
+
 [2]: https://hashrust.com/blog/moves-copies-and-clones-in-rust
