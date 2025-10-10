@@ -3,3 +3,6 @@ name = "step_1_2"
 version = "0.1.0"
 edition = "2024"
 publish = false
+
+[dependencies]
+tokio = { version = "1.0", features = ["rt", "rt-multi-thread", "macros", "time"] }
