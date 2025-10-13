@@ -191,11 +191,33 @@ Provide conversion and `Deref` implementations for these types on your choice, t
 ## Questions
 
 After completing everything above, you should be able to answer (and understand why) the following questions:
-- How value-to-value conversion is represented in [Rust]? What is relation between fallible and infallible one?
-- How reference-to-reference conversion is represented in [Rust]? How its traits differ? When and which one should be used?
-- How can inner-to-outer reference conversion be achieved in [Rust]? Which prerequisites does it have?
-- What is dereferencing in [Rust]? How it can be abused? Why it shouldn't be abused?
-- Why using [`as`] keyword is not a good practice in [Rust]? Why do we still use it?
+
+### Answers:
+
+**1. How value-to-value conversion is represented in [Rust]? What is relation between fallible and infallible one?**
+- `From<T>`/`Into<T>` for infallible conversion (can panic)
+- `TryFrom<T>`/`TryInto<T>` for fallible conversion (return `Result`)
+- `TryFrom` is the safe version of `From` that doesn't panic
+
+**2. How reference-to-reference conversion is represented in [Rust]? How its traits differ? When and which one should be used?**
+- `AsRef<T>`/`AsMut<T>` for cheap reference conversion (one type "contains" another)
+- `Borrow<T>`/`BorrowMut<T>` for semantically equivalent conversion (same `Hash`, `Eq`, `Ord`)
+- Use `AsRef` when types are related, `Borrow` when semantically identical
+
+**3. How can inner-to-outer reference conversion be achieved in [Rust]? Which prerequisites does it have?**
+- Use `#[repr(transparent)]` to ensure same memory layout
+- Use `unsafe { mem::transmute() }` or `ref-cast` crate
+- Prerequisites: identical memory layout between inner and outer types
+
+**4. What is dereferencing in [Rust]? How it can be abused? Why it shouldn't be abused?**
+- `Deref`/`DerefMut` allow custom types to behave like references
+- Abuse: using with newtype pattern instead of smart pointers
+- Should only be used for smart pointers, not for convenience methods
+
+**5. Why using [`as`] keyword is not a good practice in [Rust]? Why do we still use it?**
+- `as` only supports limited, fixed set of conversions
+- Not idiomatic when `From`/`TryFrom`/`AsRef` are available
+- Still used for primitive type casting where no other options exist
 
 
 
