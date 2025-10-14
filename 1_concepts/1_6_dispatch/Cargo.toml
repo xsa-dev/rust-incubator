@@ -1,5 +1,16 @@
 [package]
 name = "step_1_6"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 publish = false
+
+[lib]
+name = "step_1_6"
+path = "src/lib.rs"
+
+[dependencies]
+# No external dependencies needed for this example
+
+[dev-dependencies]
+# Optional: for more advanced serial testing if needed
+# serial_test = "0.8"
