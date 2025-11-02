@@ -9,7 +9,23 @@ use std::fmt;
 use self::format::{Format, FormatWith};
 
 /// Extension trait for an [`Iterator`].
-pub trait MyIteratorExt: Iterator {
+///
+/// ```compile_fail
+/// use step_2_6::MyIteratorExt;
+///
+/// struct DummyIter;
+///
+/// impl Iterator for DummyIter {
+///     type Item = ();
+///
+///     fn next(&mut self) -> Option<Self::Item> {
+///         None
+///     }
+/// }
+///
+/// impl MyIteratorExt for DummyIter {}
+/// ```
+pub trait MyIteratorExt: Iterator + private::Sealed {
     /// Format all iterator elements, separated by `sep`.
     ///
     /// All elements are formatted (any formatting trait)
@@ -71,6 +87,12 @@ pub trait MyIteratorExt: Iterator {
 }
 
 impl<T> MyIteratorExt for T where T: Iterator {}
+
+mod private {
+    pub trait Sealed {}
+
+    impl<T> Sealed for T where T: Iterator {}
+}
 
 mod format {
     use std::{cell::RefCell, fmt};
