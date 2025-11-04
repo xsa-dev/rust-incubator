@@ -3,3 +3,6 @@ name = "step_3_2"
 version = "0.1.0"
 edition = "2024"
 publish = false
+
+[dependencies]
+btreemap_proc_macro = { path = "btreemap_proc_macro" }
