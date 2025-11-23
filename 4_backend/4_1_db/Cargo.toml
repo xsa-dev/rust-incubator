@@ -3,3 +3,7 @@ name = "step_4_1"
 version = "0.1.0"
 edition = "2024"
 publish = false
+
+[dependencies]
+clap = { version = "4.5.18", features = ["derive"] }
+rusqlite = { version = "0.31.0", features = ["bundled"] }
