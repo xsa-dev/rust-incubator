@@ -9,37 +9,39 @@ use std::rc::Rc;
 /// Этот тип может быть безопасно разделен между потоками (Sync),
 /// но не может быть перемещен между потоками (!Send).
 /// 
-/// Реализация использует Arc<RefCell<T>>, который является Sync,
-/// но не Send, так как RefCell не является Send.
+/// Реализация использует Arc<RwLock<T>> вместе с маркером `PhantomData<Rc<()>>`.
+/// - Arc<RwLock<T>> обеспечивает безопасный параллельный доступ (Sync)
+/// - PhantomData<Rc<()>> делает тип !Send, так как Rc не является Send
 #[derive(Debug, Clone)]
 pub struct OnlySync<T> {
-    /// Arc<RefCell<T>> является Sync, но не Send
-    /// Arc позволяет множественное владение между потоками (Sync)
-    /// RefCell не может быть отправлен между потоками (!Send)
-    data: Arc<RefCell<T>>,
-    /// PhantomData для дополнительной информации о типе
-    _phantom: PhantomData<T>,
+    /// Arc<RwLock<T>> является Sync и позволяет множественное владение
+    data: Arc<RwLock<T>>,
+    /// PhantomData с Rc делает тип !Send
+    _not_send: PhantomData<Rc<()>>,
 }
+
+// Тип должен быть Sync (для разделения между потоками), но не Send (для перемещения между потоками)
+unsafe impl<T: Send + Sync> Sync for OnlySync<T> {}
 
 impl<T> OnlySync<T> {
     /// Создает новый экземпляр OnlySync
     pub fn new(data: T) -> Self {
         Self {
-            data: Arc::new(RefCell::new(data)),
-            _phantom: PhantomData,
+            data: Arc::new(RwLock::new(data)),
+            _not_send: PhantomData,
         }
     }
-    
+
     /// Получает неизменяемую ссылку на данные
-    pub fn get(&self) -> std::cell::Ref<'_, T> {
-        self.data.borrow()
+    pub fn get(&self) -> std::sync::RwLockReadGuard<'_, T> {
+        self.data.read().unwrap()
     }
-    
+
     /// Получает изменяемую ссылку на данные
-    pub fn get_mut(&self) -> std::cell::RefMut<'_, T> {
-        self.data.borrow_mut()
+    pub fn get_mut(&self) -> std::sync::RwLockWriteGuard<'_, T> {
+        self.data.write().unwrap()
     }
-    
+
     /// Получает количество ссылок
     pub fn strong_count(&self) -> usize {
         Arc::strong_count(&self.data)
@@ -162,9 +164,9 @@ impl<T> NotSyncNotSend<T> {
 /// Демонстрация работы с OnlySync
 fn demonstrate_only_sync() {
     println!("=== Демонстрация OnlySync (Sync, но !Send) ===");
-    
+
     let only_sync = OnlySync::new(42);
-    println!("Создан OnlySync с значением: {}", only_sync.get());
+    println!("Создан OnlySync с значением: {}", *only_sync.get());
     
     // OnlySync является Sync, поэтому можно создать несколько ссылок
     let _only_sync_clone = only_sync.clone();
