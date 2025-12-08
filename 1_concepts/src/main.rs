@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex, Weak};
 /// Узел двусвязного списка
 #[derive(Debug)]
 struct Node<T> {
-    data: T,
+    data: Option<T>,
     next: Option<Arc<Mutex<Node<T>>>>,
     prev: Option<Weak<Mutex<Node<T>>>>,
 }
@@ -11,7 +11,7 @@ struct Node<T> {
 impl<T> Node<T> {
     fn new(data: T) -> Self {
         Node {
-            data,
+            data: Some(data),
             next: None,
             prev: None,
         }
@@ -84,7 +84,7 @@ impl<T> DoublyLinkedList<T> {
 
     /// Удаляет и возвращает первый элемент списка
     pub fn pop_front(&mut self) -> Option<T> {
-        self.head.take().map(|old_head| {
+        self.head.take().and_then(|old_head| {
             match old_head.lock().unwrap().next.take() {
                 Some(new_head) => {
                     new_head.lock().unwrap().prev = None;
@@ -95,13 +95,13 @@ impl<T> DoublyLinkedList<T> {
                 }
             }
             self.len -= 1;
-            Arc::try_unwrap(old_head).ok().unwrap().into_inner().unwrap().data
+            old_head.lock().unwrap().data.take()
         })
     }
 
     /// Удаляет и возвращает последний элемент списка
     pub fn pop_back(&mut self) -> Option<T> {
-        self.tail.take().map(|old_tail| {
+        self.tail.take().and_then(|old_tail| {
             match old_tail.lock().unwrap().prev.take() {
                 Some(prev_weak) => {
                     if let Some(prev) = prev_weak.upgrade() {
@@ -116,7 +116,7 @@ impl<T> DoublyLinkedList<T> {
                 }
             }
             self.len -= 1;
-            Arc::try_unwrap(old_tail).ok().unwrap().into_inner().unwrap().data
+            old_tail.lock().unwrap().data.take()
         })
     }
 }
@@ -204,7 +204,7 @@ impl<T> DoublyLinkedListIter<T> {
     }
 }
 
-impl<T> Iterator for DoublyLinkedListIter<T> {
+impl<T: Clone> Iterator for DoublyLinkedListIter<T> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -212,13 +212,12 @@ impl<T> Iterator for DoublyLinkedListIter<T> {
             let node = node.lock().unwrap();
             self.current = node.next.clone();
             // Клонируем данные, так как мы не можем переместить их из Arc<Mutex<Node<T>>>
-            // В реальном коде здесь может потребоваться Clone bound для T
-            unsafe { std::ptr::read(&node.data) }
+            node.data.as_ref().cloned().expect("Node data missing")
         })
     }
 }
 
-impl<T> DoublyLinkedList<T> {
+impl<T: Clone> DoublyLinkedList<T> {
     /// Создает итератор для обхода списка
     pub fn iter(&self) -> DoublyLinkedListIter<T> {
         DoublyLinkedListIter::new(self)
@@ -239,19 +238,19 @@ impl<T> ThreadSafeDoublyLinkedListIter<T> {
     }
 }
 
-impl<T> Iterator for ThreadSafeDoublyLinkedListIter<T> {
+impl<T: Clone> Iterator for ThreadSafeDoublyLinkedListIter<T> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.current.take().map(|node| {
             let node = node.lock().unwrap();
             self.current = node.next.clone();
-            unsafe { std::ptr::read(&node.data) }
+            node.data.as_ref().cloned().expect("Node data missing")
         })
     }
 }
 
-impl<T> ThreadSafeDoublyLinkedList<T> {
+impl<T: Clone> ThreadSafeDoublyLinkedList<T> {
     /// Создает итератор для обхода списка
     pub fn iter(&self) -> ThreadSafeDoublyLinkedListIter<T> {
         ThreadSafeDoublyLinkedListIter::new(self)
