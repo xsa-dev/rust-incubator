@@ -210,34 +210,50 @@ impl VendingMachine {
             return Some(Vec::new());
         }
 
-        let mut remaining = amount;
-        let mut result = Vec::new();
+        let available: Vec<(Coin, u32)> = Coin::ALL
+            .iter()
+            .rev()
+            .filter_map(|coin| coins.get(coin).copied().map(|count| (*coin, count)))
+            .filter(|(_, count)| *count > 0)
+            .collect();
 
-        for coin in Coin::ALL.iter().rev() {
-            let value = coin.value();
-            let available = *coins.get(coin).unwrap_or(&0);
-            if available == 0 || value > remaining {
-                continue;
-            }
-
-            let usable = (remaining / value).min(available);
-            if usable == 0 {
-                continue;
-            }
-
-            result.extend(std::iter::repeat(*coin).take(usable as usize));
-            remaining -= value * usable;
-
+        fn backtrack(
+            idx: usize,
+            remaining: u32,
+            coins: &[(Coin, u32)],
+            current: &mut Vec<Coin>,
+        ) -> Option<Vec<Coin>> {
             if remaining == 0 {
-                break;
+                return Some(current.clone());
             }
-        }
 
-        if remaining == 0 {
-            Some(result)
-        } else {
+            if idx == coins.len() {
+                return None;
+            }
+
+            let (coin, count) = coins[idx];
+            let value = coin.value();
+            let max_use = (remaining / value).min(count);
+
+            for use_count in (0..=max_use).rev() {
+                for _ in 0..use_count {
+                    current.push(coin);
+                }
+
+                let next_remaining = remaining - (value * use_count);
+                if let Some(result) = backtrack(idx + 1, next_remaining, coins, current) {
+                    return Some(result);
+                }
+
+                for _ in 0..use_count {
+                    current.pop();
+                }
+            }
+
             None
         }
+
+        backtrack(0, amount, &available, &mut Vec::new())
     }
 
     fn deduct_change(coins: &mut BTreeMap<Coin, u32>, change: &[Coin]) {
@@ -334,6 +350,27 @@ mod tests {
             err,
             PurchaseError::CannotProvideChange { change: 20 }
         );
+    }
+
+    #[test]
+    fn non_greedy_change_combination_succeeds() {
+        let mut machine = VendingMachine::new(2);
+        let snack = Product::new("Snack", NonZeroU32::new(32).unwrap());
+        machine.restock(snack.clone(), 1).unwrap();
+
+        machine.add_change([
+            Coin::Ten,
+            Coin::Five,
+            Coin::Two,
+            Coin::Two,
+            Coin::Two,
+            Coin::Two,
+        ]);
+
+        let (product, change) = machine.purchase("Snack", [Coin::Fifty]).unwrap();
+
+        assert_eq!(product.name(), snack.name());
+        assert_eq!(change, vec![Coin::Ten, Coin::Two, Coin::Two, Coin::Two, Coin::Two]);
     }
 
     #[test]
