@@ -6,3 +6,6 @@ publish = false
 
 [dependencies]
 # Стандартные зависимости для thread safety уже включены в std
+
+[dev-dependencies]
+static_assertions = "1.1"

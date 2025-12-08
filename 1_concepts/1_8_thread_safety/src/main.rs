@@ -329,8 +329,20 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use static_assertions::{assert_impl_all, assert_not_impl_any};
     use std::sync::Arc;
     use std::thread;
+
+    // Проверяем авто-трейты для типажей Send/Sync
+    assert_impl_all!(OnlySync<i32>: Sync);
+    assert_not_impl_any!(OnlySync<i32>: Send);
+
+    assert_impl_all!(OnlySend<i32>: Send);
+    assert_not_impl_any!(OnlySend<i32>: Sync);
+
+    assert_impl_all!(SyncAndSend<i32>: Send, Sync);
+
+    assert_not_impl_any!(NotSyncNotSend<i32>: Send, Sync);
     
     #[test]
     fn test_only_sync_creation() {
