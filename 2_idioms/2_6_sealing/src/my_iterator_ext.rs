@@ -25,7 +25,10 @@ use self::format::{Format, FormatWith};
 ///
 /// impl MyIteratorExt for DummyIter {}
 /// ```
-pub trait MyIteratorExt: Iterator + private::Sealed {
+pub trait MyIteratorExt: Iterator {
+    #[doc(hidden)]
+    type __Seal: private::Sealed;
+
     /// Format all iterator elements, separated by `sep`.
     ///
     /// All elements are formatted (any formatting trait)
@@ -86,12 +89,19 @@ pub trait MyIteratorExt: Iterator + private::Sealed {
     }
 }
 
-impl<T> MyIteratorExt for T where T: Iterator {}
+impl<T> MyIteratorExt for T
+where
+    T: Iterator,
+{
+    type __Seal = private::Token;
+}
 
 mod private {
+    pub struct Token;
+
     pub trait Sealed {}
 
-    impl<T> Sealed for T where T: Iterator {}
+    impl Sealed for Token {}
 }
 
 mod format {
