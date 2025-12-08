@@ -5,7 +5,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{delete, get, post, put},
+    routing::{get, put},
 };
 use clap::{Parser, Subcommand};
 use reqwest::Url;
@@ -21,12 +21,12 @@ struct Task {
     completed: bool,
 }
 
-#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 struct CreateTask {
     title: String,
 }
 
-#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 struct UpdateTask {
     title: Option<String>,
     completed: Option<bool>,
