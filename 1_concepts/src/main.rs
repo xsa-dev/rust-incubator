@@ -208,11 +208,11 @@ impl<T: Clone> Iterator for DoublyLinkedListIter<T> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.current.take().map(|node| {
+        self.current.take().and_then(|node| {
             let node = node.lock().unwrap();
             self.current = node.next.clone();
             // Клонируем данные, так как мы не можем переместить их из Arc<Mutex<Node<T>>>
-            node.data.as_ref().cloned().expect("Node data missing")
+            node.data.as_ref().cloned()
         })
     }
 }
@@ -242,10 +242,10 @@ impl<T: Clone> Iterator for ThreadSafeDoublyLinkedListIter<T> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.current.take().map(|node| {
+        self.current.take().and_then(|node| {
             let node = node.lock().unwrap();
             self.current = node.next.clone();
-            node.data.as_ref().cloned().expect("Node data missing")
+            node.data.as_ref().cloned()
         })
     }
 }
