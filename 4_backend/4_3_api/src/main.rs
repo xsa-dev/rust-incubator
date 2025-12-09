@@ -367,10 +367,14 @@ async fn get_user_graph(
 async fn add_friend(
     State(state): State<Arc<Mutex<AppState>>>,
     Path((id, friend_id)): Path<(String, String)>,
-    _auth: AuthenticatedUser,
+    auth: AuthenticatedUser,
 ) -> Result<StatusCode, ApiError> {
     let id = Uuid::parse_str(&id).map_err(|_| ApiError::BadIdentifier)?;
     let friend_id = Uuid::parse_str(&friend_id).map_err(|_| ApiError::BadIdentifier)?;
+
+    if auth.0 != id {
+        return Err(ApiError::Unauthorized);
+    }
 
     let mut state = state.lock().await;
     let user = state.users.get_mut(&id).ok_or(ApiError::UserNotFound)?;
@@ -393,10 +397,14 @@ async fn add_friend(
 async fn remove_friend(
     State(state): State<Arc<Mutex<AppState>>>,
     Path((id, friend_id)): Path<(String, String)>,
-    _auth: AuthenticatedUser,
+    auth: AuthenticatedUser,
 ) -> Result<StatusCode, ApiError> {
     let id = Uuid::parse_str(&id).map_err(|_| ApiError::BadIdentifier)?;
     let friend_id = Uuid::parse_str(&friend_id).map_err(|_| ApiError::BadIdentifier)?;
+
+    if auth.0 != id {
+        return Err(ApiError::Unauthorized);
+    }
 
     let mut state = state.lock().await;
     let user = state.users.get_mut(&id).ok_or(ApiError::UserNotFound)?;
