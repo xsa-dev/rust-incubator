@@ -3,7 +3,63 @@ fn main() {
 }
 
 fn parse(input: &str) -> (Option<Sign>, Option<usize>, Option<Precision>) {
-    unimplemented!()
+    let mut sign = None;
+    let mut width = None;
+    let mut precision = None;
+
+    let dot_index = input.find('.');
+    let (before_dot, after_dot) = match dot_index {
+        Some(idx) => (&input[..idx], &input[idx + 1..]),
+        None => (input, ""),
+    };
+
+    for ch in before_dot.chars() {
+        if ch == '+' {
+            sign = Some(Sign::Plus);
+            break;
+        } else if ch == '-' {
+            sign = Some(Sign::Minus);
+            break;
+        }
+    }
+
+    if let Some(digits) = before_dot
+        .chars()
+        .rev()
+        .skip_while(|c| !c.is_ascii_digit())
+        .take_while(|c| c.is_ascii_digit())
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect::<String>()
+        .parse::<usize>()
+        .ok()
+    {
+        width = Some(digits);
+    }
+
+    if !after_dot.is_empty() {
+        if let Some(rest) = after_dot.strip_prefix('*') {
+            precision = Some(Precision::Asterisk);
+            let _ = rest;
+        } else if let Some((digits, _)) = after_dot.split_once('$') {
+            if let Ok(value) = digits.parse::<usize>() {
+                precision = Some(Precision::Argument(value));
+            }
+        } else {
+            let digits: String = after_dot
+                .chars()
+                .take_while(|c| c.is_ascii_digit())
+                .collect();
+            if !digits.is_empty() {
+                if let Ok(value) = digits.parse::<usize>() {
+                    precision = Some(Precision::Integer(value));
+                }
+            }
+        }
+    }
+
+    (sign, width, precision)
 }
 
 #[derive(Debug, PartialEq)]
