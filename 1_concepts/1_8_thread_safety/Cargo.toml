@@ -3,3 +3,9 @@ name = "step_1_8"
 version = "0.1.0"
 edition = "2024"
 publish = false
+
+[dependencies]
+# Стандартные зависимости для thread safety уже включены в std
+
+[dev-dependencies]
+static_assertions = "1.1"

@@ -1,63 +1,141 @@
+use once_cell::sync::Lazy;
+use regex::Regex;
+
 fn main() {
-    println!("Implement me!");
+    println!("Use `parse` or `parse_with_regex` from tests");
 }
 
 fn parse(input: &str) -> (Option<Sign>, Option<usize>, Option<Precision>) {
-    let mut sign = None;
-    let mut width = None;
-    let mut precision = None;
+    parse_manual(input)
+}
 
-    let dot_index = input.find('.');
-    let (before_dot, after_dot) = match dot_index {
-        Some(idx) => (&input[..idx], &input[idx + 1..]),
-        None => (input, ""),
+fn parse_manual(input: &str) -> (Option<Sign>, Option<usize>, Option<Precision>) {
+    let chars: Vec<char> = input.chars().collect();
+    let mut index = 0;
+
+    if chars
+        .get(index + 1)
+        .is_some_and(|c| matches!(c, '<' | '^' | '>'))
+    {
+        index += 2;
+    } else if chars
+        .get(index)
+        .is_some_and(|c| matches!(c, '<' | '^' | '>'))
+    {
+        index += 1;
+    }
+
+    let sign = chars.get(index).and_then(|c| match c {
+        '+' => {
+            index += 1;
+            Some(Sign::Plus)
+        }
+        '-' => {
+            index += 1;
+            Some(Sign::Minus)
+        }
+        _ => None,
+    });
+
+    if chars.get(index) == Some(&'#') {
+        index += 1;
+    }
+
+    if chars.get(index) == Some(&'0') {
+        index += 1;
+    }
+
+    let width = {
+        let start = index;
+        while chars.get(index).is_some_and(|c| c.is_ascii_digit()) {
+            index += 1;
+        }
+
+        if start == index {
+            None
+        } else {
+            let value = chars[start..index].iter().collect::<String>().parse().ok();
+
+            if chars.get(index) == Some(&'$') {
+                index += 1;
+            }
+
+            value
+        }
     };
 
-    for ch in before_dot.chars() {
-        if ch == '+' {
-            sign = Some(Sign::Plus);
-            break;
-        } else if ch == '-' {
-            sign = Some(Sign::Minus);
-            break;
-        }
-    }
-
-    if let Some(digits) = before_dot
-        .chars()
-        .rev()
-        .skip_while(|c| !c.is_ascii_digit())
-        .take_while(|c| c.is_ascii_digit())
-        .collect::<Vec<_>>()
-        .into_iter()
-        .rev()
-        .collect::<String>()
-        .parse::<usize>()
-        .ok()
-    {
-        width = Some(digits);
-    }
-
-    if !after_dot.is_empty() {
-        if let Some(rest) = after_dot.strip_prefix('*') {
-            precision = Some(Precision::Asterisk);
-            let _ = rest;
-        } else if let Some((digits, _)) = after_dot.split_once('$') {
-            if let Ok(value) = digits.parse::<usize>() {
-                precision = Some(Precision::Argument(value));
+    let precision = if chars.get(index) == Some(&'.') {
+        index += 1;
+        match chars.get(index) {
+            Some('*') => {
+                index += 1;
+                Some(Precision::Asterisk)
             }
-        } else {
-            let digits: String = after_dot
-                .chars()
-                .take_while(|c| c.is_ascii_digit())
-                .collect();
-            if !digits.is_empty() {
-                if let Ok(value) = digits.parse::<usize>() {
-                    precision = Some(Precision::Integer(value));
+            Some(c) if c.is_ascii_digit() => {
+                let start = index;
+                while chars.get(index).is_some_and(|c| c.is_ascii_digit()) {
+                    index += 1;
                 }
+
+                let digits: Option<usize> =
+                    chars[start..index].iter().collect::<String>().parse().ok();
+
+                let result = if chars.get(index) == Some(&'$') {
+                    index += 1;
+                    digits.map(Precision::Argument)
+                } else {
+                    digits.map(Precision::Integer)
+                };
+
+                result
             }
+            _ => None,
         }
-    }
+    } else {
+        None
+    };
+
+    (sign, width, precision)
+}
+
+fn parse_with_regex(input: &str) -> (Option<Sign>, Option<usize>, Option<Precision>) {
+    static FORMAT_RE: Lazy<Regex> = Lazy::new(|| {
+        Regex::new(r"^(?:.?[<^>])?(?P<sign>[+-])?#?0?(?P<width>\d+(?:\$)?)?(?P<precision>\.(?:\d+(?:\$)?|\*))?")
+            .expect("valid regex")
+    });
+
+    let captures = FORMAT_RE.captures(input);
+
+    let sign = captures
+        .as_ref()
+        .and_then(|caps| caps.name("sign"))
+        .and_then(|m| match m.as_str() {
+            "+" => Some(Sign::Plus),
+            "-" => Some(Sign::Minus),
+            _ => None,
+        });
+
+    let width = captures
+        .as_ref()
+        .and_then(|caps| caps.name("width"))
+        .and_then(|m| m.as_str().trim_end_matches('$').parse().ok());
+
+    let precision = captures
+        .as_ref()
+        .and_then(|caps| caps.name("precision"))
+        .and_then(|m| match &m.as_str()[1..] {
+            "*" => Some(Precision::Asterisk),
+            value => {
+                let trimmed = value.trim_end_matches('$');
+                trimmed.parse().ok().map(|number| {
+                    if value.ends_with('$') {
+                        Precision::Argument(number)
+                    } else {
+                        Precision::Integer(number)
+                    }
+                })
+            }
+        });
 
     (sign, width, precision)
 }
@@ -90,6 +168,8 @@ mod spec {
         ] {
             let (sign, ..) = parse(input);
             assert_eq!(sign, expected);
+            let (sign, ..) = parse_with_regex(input);
+            assert_eq!(sign, expected);
         }
     }
 
@@ -101,8 +181,11 @@ mod spec {
             (">+8.*", Some(8)),
             ("-.1$x", None),
             ("a^#043.8?", Some(43)),
+            ("+1$?", Some(1)),
         ] {
             let (_, width, _) = parse(input);
+            assert_eq!(width, expected);
+            let (_, width, _) = parse_with_regex(input);
             assert_eq!(width, expected);
         }
     }
@@ -115,8 +198,11 @@ mod spec {
             (">+8.*", Some(Precision::Asterisk)),
             ("-.1$x", Some(Precision::Argument(1))),
             ("a^#043.8?", Some(Precision::Integer(8))),
+            ("+1$.2$", Some(Precision::Argument(2))),
         ] {
             let (_, _, precision) = parse(input);
+            assert_eq!(precision, expected);
+            let (_, _, precision) = parse_with_regex(input);
             assert_eq!(precision, expected);
         }
     }

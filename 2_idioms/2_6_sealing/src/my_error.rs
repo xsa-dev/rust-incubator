@@ -66,8 +66,34 @@ pub trait MyError: Debug + Display {
     /// Gets the `TypeId` of `self`.
     ///
     /// __This is memory-unsafe to override in user code.__
+    ///
+    /// This method is sealed outside of this module.
     #[doc(hidden)]
-    fn type_id(&self) -> TypeId
+    ///
+    /// ```compile_fail
+    /// use std::fmt;
+    ///
+    /// use step_2_6::MyError;
+    ///
+    /// #[derive(Debug)]
+    /// struct CustomError;
+    ///
+    /// impl fmt::Display for CustomError {
+    ///     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    ///         write!(f, "custom error")
+    ///     }
+    /// }
+    ///
+    /// impl MyError for CustomError {
+    ///     fn type_id(&self) -> std::any::TypeId
+    ///     where
+    ///         Self: 'static,
+    ///     {
+    ///         std::any::TypeId::of::<()>()
+    ///     }
+    /// }
+    /// ```
+    fn type_id(&self, _: private::Token) -> TypeId
     where
         Self: 'static,
     {
@@ -79,4 +105,9 @@ impl<'a, T: MyError + ?Sized> MyError for &'a T {
     fn source(&self) -> Option<&(dyn MyError + 'static)> {
         MyError::source(&**self)
     }
+}
+
+mod private {
+    #[derive(Clone, Copy, Default)]
+    pub struct Token;
 }
