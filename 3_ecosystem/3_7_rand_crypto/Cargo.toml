@@ -3,3 +3,12 @@ name = "step_3_7"
 version = "0.1.0"
 edition = "2024"
 publish = false
+
+[dependencies]
+rand = { version = "0.8", features = ["std"] }
+sha3 = "0.10"
+hex = "0.4"
+argon2 = { version = "0.5", default-features = false, features = ["std"] }
+
+[dev-dependencies]
+tempfile = "3"
