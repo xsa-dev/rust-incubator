@@ -82,6 +82,36 @@ impl Server {
 }
 
 #[cfg(test)]
+mod error_spec {
+    use super::*;
+
+    mod builder {
+        use super::*;
+
+        #[test]
+        fn sets_code_status_and_message() {
+            let err = Error::new("NOT_FOUND")
+                .with_status(404)
+                .with_message("missing user");
+
+            assert_eq!(err.code(), "NOT_FOUND");
+            assert_eq!(err.status(), 404);
+            assert_eq!(err.message(), "missing user");
+        }
+
+        #[test]
+        fn mutation_helpers_allow_reuse() {
+            let mut err = Error::new("BAD_REQUEST");
+            err.set_status(400).set_message("invalid payload");
+
+            assert_eq!(err.code(), "BAD_REQUEST");
+            assert_eq!(err.status(), 400);
+            assert_eq!(err.message(), "invalid payload");
+        }
+    }
+}
+
+#[cfg(test)]
 mod server_spec {
     use super::*;
 
