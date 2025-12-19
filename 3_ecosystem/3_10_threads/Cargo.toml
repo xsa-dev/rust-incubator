@@ -3,3 +3,8 @@ name = "step_3_10"
 version = "0.1.0"
 edition = "2024"
 publish = false
+
+[dependencies]
+crossbeam-channel = "0.5"
+rand = { version = "0.8", features = ["std", "std_rng"] }
+rayon = "1.10"
