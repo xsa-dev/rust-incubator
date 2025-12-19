@@ -294,3 +294,110 @@ async fn main() {
         .expect("Unable to bind to port");
     axum::serve(listener, app).await.unwrap();
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_graphql::Request;
+    use serde_json::Value;
+
+    #[tokio::test]
+    async fn registers_logs_in_and_manages_friends() {
+        let schema = Schema::build(QueryRoot, MutationRoot, EmptySubscription).finish();
+        let state = AppState::default();
+
+        schema
+            .execute(
+                Request::new("mutation { register(name:\"Alice\", password:\"pwd\") { id } }")
+                    .data(state.clone()),
+            )
+            .await;
+        schema
+            .execute(
+                Request::new("mutation { register(name:\"Bob\", password:\"pwd\") { id } }")
+                    .data(state.clone()),
+            )
+            .await;
+
+        let (alice_id, bob_id) = {
+            let data = state.inner.lock().await;
+            let alice_id = data
+                .users
+                .values()
+                .find(|u| u.name == "Alice")
+                .map(|u| u.id)
+                .unwrap();
+            let bob_id = data
+                .users
+                .values()
+                .find(|u| u.name == "Bob")
+                .map(|u| u.id)
+                .unwrap();
+            (alice_id, bob_id)
+        };
+
+        let login_response = schema
+            .execute(
+                Request::new(
+                    "mutation { login(name:\"Alice\", password:\"pwd\") { token user { id } } }",
+                )
+                .data(state.clone()),
+            )
+            .await;
+        assert!(login_response.errors.is_empty());
+        let token = login_response.data.clone().into_json().unwrap()["login"]["token"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        {
+            let data = state.inner.lock().await;
+            assert!(data.tokens.contains_key(&token));
+        }
+
+        let mut add_friend_request = Request::new(format!(
+            "mutation {{ addFriend(friendId: \"{bob_id}\") {{ id }} }}",
+        ));
+        add_friend_request = add_friend_request.data(state.clone());
+        add_friend_request = add_friend_request.data(Some(AuthedUser { id: alice_id }));
+        let add_friend_response = schema.execute(add_friend_request).await;
+        assert!(add_friend_response.errors.is_empty());
+
+        let mut user_query = Request::new(format!(
+            "query {{ user(id: \"{alice_id}\") {{ id friends {{ id }} }} }}",
+        ));
+        user_query = user_query.data(state.clone());
+        user_query = user_query.data(Some(AuthedUser { id: alice_id }));
+        let user_response = schema.execute(user_query).await;
+        assert!(user_response.errors.is_empty());
+        let friends: Vec<String> = user_response.data.into_json().unwrap()["user"]["friends"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v["id"].as_str().unwrap().to_string())
+            .collect();
+        assert_eq!(friends, vec![bob_id.to_string()]);
+
+        let mut remove_friend_request = Request::new(format!(
+            "mutation {{ removeFriend(friendId: \"{bob_id}\") {{ id }} }}",
+        ));
+        remove_friend_request = remove_friend_request.data(state.clone());
+        remove_friend_request =
+            remove_friend_request.data::<Option<AuthedUser>>(Some(AuthedUser { id: alice_id }));
+        let remove_friend_response = schema.execute(remove_friend_request).await;
+        assert!(remove_friend_response.errors.is_empty());
+
+        let mut check_after_removal = Request::new(format!(
+            "query {{ user(id: \"{alice_id}\") {{ friends {{ id }} }} }}",
+        ));
+        check_after_removal = check_after_removal.data(state.clone());
+        check_after_removal =
+            check_after_removal.data::<Option<AuthedUser>>(Some(AuthedUser { id: alice_id }));
+        let after_response = schema.execute(check_after_removal).await;
+        assert!(after_response.errors.is_empty());
+        let friends_after: Vec<Value> = after_response.data.into_json().unwrap()["user"]["friends"]
+            .as_array()
+            .cloned()
+            .unwrap();
+        assert!(friends_after.is_empty());
+    }
+}

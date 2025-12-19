@@ -86,8 +86,8 @@ async fn run_server(port: u16) -> Result<(), Box<dyn std::error::Error>> {
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     println!("Server listening on {addr}");
 
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service())
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    axum::serve(listener, app.into_make_service())
         .with_graceful_shutdown(shutdown_signal())
         .await?;
 
@@ -294,5 +294,45 @@ fn error_response(msg: &str) -> CommandResponse {
         status: "error".into(),
         message: msg.into(),
         data: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn executes_role_and_user_commands() {
+        let mut store = Store::default();
+
+        let response = execute_command(&mut store, "create_role admin Admin");
+        assert_eq!(response.status, "ok");
+
+        let response = execute_command(&mut store, "create_role editor Editor");
+        assert_eq!(response.status, "ok");
+
+        let response = execute_command(&mut store, "create_user 1 Alice admin");
+        assert_eq!(response.status, "ok");
+
+        let response = execute_command(&mut store, "assign_role 1 editor");
+        assert_eq!(response.status, "ok");
+
+        let response = execute_command(&mut store, "list_users");
+        assert_eq!(response.status, "ok");
+        let users: Vec<User> = serde_json::from_value(response.data.expect("users list")).unwrap();
+        assert_eq!(users.len(), 1);
+        let user = &users[0];
+        assert_eq!(user.name, "Alice");
+        assert!(user.roles.contains("admin"));
+        assert!(user.roles.contains("editor"));
+
+        let response = execute_command(&mut store, "unassign_role 1 admin");
+        assert_eq!(response.status, "ok");
+
+        let response = execute_command(&mut store, "show_user 1");
+        assert_eq!(response.status, "ok");
+        let user: User = serde_json::from_value(response.data.expect("user details")).unwrap();
+        assert_eq!(user.roles.len(), 1);
+        assert!(user.roles.contains("editor"));
     }
 }

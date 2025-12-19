@@ -74,19 +74,19 @@ impl FromRef<SharedState> for Arc<Mutex<AppState>> {
     }
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 struct RegisterPayload {
     name: String,
     password: String,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 struct LoginPayload {
     name: String,
     password: String,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 struct TokenResponse {
     token: String,
 }
@@ -117,6 +117,7 @@ impl IntoResponse for ApiError {
     }
 }
 
+#[allow(dead_code)]
 struct AuthenticatedUser(Uuid);
 
 #[async_trait]
@@ -259,9 +260,8 @@ async fn run_server(addr: SocketAddr) -> anyhow::Result<()> {
         );
 
     println!("Running server on {addr}");
-    axum::Server::bind(&addr)
-        .serve(router.into_make_service())
-        .await?;
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    axum::serve(listener, router.into_make_service()).await?;
     Ok(())
 }
 
@@ -373,9 +373,11 @@ async fn add_friend(
     let friend_id = Uuid::parse_str(&friend_id).map_err(|_| ApiError::BadIdentifier)?;
 
     let mut state = state.lock().await;
+    if !state.users.contains_key(&friend_id) {
+        return Err(ApiError::UserNotFound);
+    }
     let user = state.users.get_mut(&id).ok_or(ApiError::UserNotFound)?;
-    let friend = state.users.get(&friend_id).ok_or(ApiError::UserNotFound)?;
-    user.friends.insert(friend.id);
+    user.friends.insert(friend_id);
     Ok(StatusCode::OK)
 }
 
@@ -467,4 +469,108 @@ enum Command {
         #[arg(long)]
         friend_id: String,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::Json;
+    use axum::extract::State;
+
+    #[tokio::test]
+    async fn registers_users_and_manages_friendships() {
+        let state = Arc::new(Mutex::new(AppState::default()));
+
+        let status = register_user(
+            State(state.clone()),
+            Json(RegisterPayload {
+                name: "alice".into(),
+                password: "secret".into(),
+            }),
+        )
+        .await
+        .expect("register alice");
+        assert_eq!(status, StatusCode::OK);
+
+        let duplicate = register_user(
+            State(state.clone()),
+            Json(RegisterPayload {
+                name: "alice".into(),
+                password: "secret".into(),
+            }),
+        )
+        .await;
+        assert!(matches!(duplicate, Err(ApiError::UserExists)));
+
+        register_user(
+            State(state.clone()),
+            Json(RegisterPayload {
+                name: "bob".into(),
+                password: "hunter2".into(),
+            }),
+        )
+        .await
+        .expect("register bob");
+
+        let Json(token) = login_user(
+            State(state.clone()),
+            Json(LoginPayload {
+                name: "alice".into(),
+                password: "secret".into(),
+            }),
+        )
+        .await
+        .expect("login alice");
+        assert!(!token.token.is_empty());
+        {
+            let guard = state.lock().await;
+            assert!(guard.auth.tokens.contains_key(&token.token));
+        }
+
+        let (alice_id, bob_id) = {
+            let guard = state.lock().await;
+            let alice_id = *guard.names.get("alice").unwrap();
+            let bob_id = *guard.names.get("bob").unwrap();
+            (alice_id, bob_id)
+        };
+
+        let status = add_friend(
+            State(state.clone()),
+            Path((alice_id.to_string(), bob_id.to_string())),
+            AuthenticatedUser(alice_id),
+        )
+        .await
+        .expect("add friend");
+        assert_eq!(status, StatusCode::OK);
+
+        let Json(graph) = get_user_graph(
+            State(state.clone()),
+            Path(alice_id.to_string()),
+            AuthenticatedUser(alice_id),
+        )
+        .await
+        .expect("get user graph");
+        assert_eq!(graph.user.id, alice_id);
+        assert_eq!(graph.user.name, "alice");
+        assert_eq!(graph.friends.len(), 1);
+        assert_eq!(graph.friends[0].id, bob_id);
+
+        let status = remove_friend(
+            State(state.clone()),
+            Path((alice_id.to_string(), bob_id.to_string())),
+            AuthenticatedUser(alice_id),
+        )
+        .await
+        .expect("remove friend");
+        assert_eq!(status, StatusCode::OK);
+
+        let Json(graph_after) = get_user_graph(
+            State(state.clone()),
+            Path(alice_id.to_string()),
+            AuthenticatedUser(alice_id),
+        )
+        .await
+        .expect("get user graph after removal");
+        assert!(graph_after.friends.is_empty());
+    }
 }
