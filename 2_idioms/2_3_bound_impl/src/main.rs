@@ -247,3 +247,85 @@ impl<I, A> BorrowMut<HydratedAggregate<A>> for Entity<I, A> {
         &mut self.aggregate
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Default, Debug, PartialEq)]
+    struct Counter(u32);
+
+    impl Aggregate for Counter {
+        fn aggregate_type() -> &'static str {
+            "counter"
+        }
+    }
+
+    #[derive(Debug)]
+    struct CounterId(String);
+
+    impl AggregateId<Counter> for CounterId {
+        fn as_str(&self) -> &str {
+            &self.0
+        }
+    }
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    struct Increment;
+
+    impl Event for Increment {
+        fn event_type(&self) -> &'static str {
+            "increment"
+        }
+    }
+
+    impl AggregateEvent<Counter> for Increment {
+        fn apply_to(self, aggregate: &mut Counter) {
+            aggregate.0 += 1;
+        }
+    }
+
+    #[test]
+    fn applying_events_increments_version_and_state() {
+        let mut aggregate = HydratedAggregate::<Counter>::default();
+        assert_eq!(aggregate.version(), Version::Initial);
+
+        aggregate.apply(Increment);
+        assert_eq!(aggregate.state().0, 1);
+        assert_eq!(aggregate.version(), Version::Number(EventNumber::MIN_VALUE));
+
+        aggregate.apply_events([Increment, Increment]);
+        assert_eq!(aggregate.state().0, 3);
+        assert_eq!(
+            aggregate.version(),
+            Version::new(3)
+        );
+    }
+
+    #[test]
+    fn entity_wraps_and_exposes_state() {
+        let mut aggregate = HydratedAggregate::<Counter>::default();
+        aggregate.apply_events([Increment, Increment]);
+
+        let id = CounterId("counter#1".to_string());
+        let mut entity = Entity::new(id, aggregate);
+        assert_eq!(entity.id().as_str(), "counter#1");
+        assert_eq!(entity.aggregate().state().0, 2);
+
+        entity.aggregate_mut().apply(Increment);
+        let inner: HydratedAggregate<Counter> = entity.into();
+        assert_eq!(inner.state().0, 3);
+    }
+
+    #[test]
+    fn snapshot_version_can_be_updated() {
+        let mut aggregate = HydratedAggregate::<Counter>::default();
+        assert_eq!(aggregate.snapshot_version(), None);
+
+        aggregate.apply(Increment);
+        let current_version = aggregate.version();
+        aggregate.set_snapshot_version(current_version);
+
+        assert_eq!(aggregate.snapshot_version(), Some(current_version));
+    }
+}
