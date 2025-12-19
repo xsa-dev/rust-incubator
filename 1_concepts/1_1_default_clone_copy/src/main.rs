@@ -2,7 +2,7 @@
 // Create a Point type which represents a 2D point (x and y coordinates). This type has to be Copy and Default.
 // Create a Polyline type which represents a non-empty set of Points of unknown size. This type has to be Clone and non-Default.
 
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Copy, Clone, Default, PartialEq)]
 struct Point {
     x: f64,
     y: f64,
@@ -14,7 +14,7 @@ struct Polyline {
 }
 
 impl Polyline {
-    fn new(points: Vec<Point>) -> Option<Self> {
+    pub fn new(points: Vec<Point>) -> Option<Self> {
         if points.is_empty() {
             None
         } else {
@@ -22,15 +22,15 @@ impl Polyline {
         }
     }
 
-    fn add_point(&mut self, point: Point) {
+    pub fn add_point(&mut self, point: Point) {
         self.points.push(point);
     }
 
-    fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.points.len()
     }
 
-    fn last(&self) -> Option<&Point> {
+    pub fn last(&self) -> Option<&Point> {
         self.points.last()
     }
 }
@@ -52,4 +52,42 @@ fn main() {
 
     let clone_line = line.clone();
     println!("Copied line: {clone_line:?}");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn point_supports_copy_and_default() {
+        let origin = Point::default();
+        assert_eq!(origin, Point { x: 0.0, y: 0.0 });
+
+        let copy = origin;
+        assert_eq!(origin, copy, "Copy should duplicate the coordinates");
+    }
+
+    #[test]
+    fn polyline_requires_points_and_tracks_length() {
+        assert!(Polyline::new(vec![]).is_none());
+
+        let mut polyline = Polyline::new(vec![Point { x: 1.0, y: 1.0 }]).unwrap();
+        assert_eq!(polyline.len(), 1);
+        assert_eq!(polyline.last(), Some(&Point { x: 1.0, y: 1.0 }));
+
+        polyline.add_point(Point { x: -1.0, y: 2.5 });
+        assert_eq!(polyline.len(), 2);
+        assert_eq!(polyline.last(), Some(&Point { x: -1.0, y: 2.5 }));
+    }
+
+    #[test]
+    fn cloning_polyline_copies_points() {
+        let mut original = Polyline::new(vec![Point { x: 3.0, y: 4.0 }]).unwrap();
+        let cloned = original.clone();
+
+        // Changing the original should not affect the clone because points are copied.
+        original.add_point(Point { x: 9.0, y: 9.0 });
+        assert_eq!(cloned.len(), 1);
+        assert_eq!(cloned.last(), Some(&Point { x: 3.0, y: 4.0 }));
+    }
 }

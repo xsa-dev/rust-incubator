@@ -223,6 +223,24 @@ impl<T> Random<T> {
     pub fn shuffle(&mut self) {
         self.select_random();
     }
+
+    /// Управляемый выбор значения для юнит-тестов.
+    #[cfg(test)]
+    fn set_current_index(&mut self, index: usize) {
+        self.current_index = index % 3;
+    }
+
+    /// Доступ к текущему значению без изменения индекса (используется в тестах).
+    #[cfg(test)]
+    fn current_value(&self) -> &T {
+        self.get_current()
+    }
+
+    /// Мутирующий доступ к текущему значению без выбора нового индекса (используется в тестах).
+    #[cfg(test)]
+    fn current_value_mut(&mut self) -> &mut T {
+        self.get_current_mut()
+    }
 }
 
 /// Deref - позволяет использовать Random<T> как обычную ссылку на T
@@ -327,5 +345,58 @@ fn main() {
         // Deref автоматически разыменовывает Random<EmailString> в &EmailString
         println!("  Обращение {}: {}", i, *random_emails);
         random_emails.shuffle();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validates_email_addresses() {
+        let ok = EmailString::new("user@example.com");
+        assert!(ok.is_ok());
+        assert_eq!(ok.unwrap().as_str(), "user@example.com");
+
+        let err = EmailString::new("not-an-email");
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn from_conversions_create_email_strings() {
+        let email: EmailString = "admin@example.org".into();
+        assert_eq!(email.as_ref(), "admin@example.org");
+
+        let email_from_string: EmailString = String::from("owner@example.org").into();
+        let borrowed: &str = email_from_string.borrow();
+        assert_eq!(borrowed, "owner@example.org");
+    }
+
+    #[test]
+    fn random_can_be_controlled_in_tests() {
+        let mut random = Random::new(10, 20, 30);
+
+        random.set_current_index(2);
+        assert_eq!(*random, 30);
+
+        random.set_current_index(0);
+        assert_eq!(*random, 10);
+    }
+
+    #[test]
+    fn random_mutation_preserves_changes() {
+        let mut random = Random::new(
+            String::from("first"),
+            String::from("second"),
+            String::from("third"),
+        );
+
+        random.set_current_index(1);
+        random.current_value_mut().push_str(" updated");
+        assert_eq!(random.current_value(), "second updated");
+
+        // Снова устанавливаем индекс, чтобы убедиться, что значение сохранилось.
+        random.set_current_index(1);
+        assert_eq!(random.current_value(), "second updated");
     }
 }

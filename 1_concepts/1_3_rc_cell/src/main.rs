@@ -115,3 +115,41 @@ fn main() {
     println!("Final string stack length: {}", string_stack.len()); // Should be 0
     println!("Final string stack2 length: {}", string_stack2.len()); // Should be 0
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shared_mutation_is_visible_across_clones() {
+        let stack = GlobalStack::new();
+        stack.push(1);
+        stack.push(2);
+
+        let clone = stack.clone();
+        assert_eq!(clone.len(), 2);
+        assert_eq!(clone.pop(), Some(2));
+        assert_eq!(stack.len(), 1);
+    }
+
+    #[test]
+    fn peek_reads_without_removing() {
+        let stack = GlobalStack::new();
+        stack.push("first");
+        stack.push("second");
+
+        {
+            let peeked = stack.peek().expect("value expected");
+            assert_eq!(&*peeked, &"second");
+        }
+
+        assert_eq!(stack.len(), 2, "peek must not remove the element");
+    }
+
+    #[test]
+    fn empty_and_default_match() {
+        let stack: GlobalStack<i32> = GlobalStack::default();
+        assert!(stack.is_empty());
+        assert_eq!(stack.pop(), None);
+    }
+}
