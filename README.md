@@ -99,10 +99,10 @@ Each step must be performed as a separate [PR (pull request)][PR] with an approp
     - [x] [3.9. Command-line arguments, environment variables and configs][Step 3.9] (1 day)
     - [x] [3.10. Multithreading and parallelism][Step 3.10] (1 day)
     - [x] [3.11. Async I/O, futures and actors][Step 3.11] (2 days)
-- [ ] [4. Backend ecosystem][Step 4] (3 days, after all sub-steps)
-    - [ ] [4.1. Databases, connection pools and ORMs][Step 4.1] (1 day)
-    - [ ] [4.2. HTTP servers and clients][Step 4.2] (1 day)
-    - [ ] [4.3. API servers, clients and tools][Step 4.3] (1 day)
+- [x] [4. Backend ecosystem][Step 4] (3 days, after all sub-steps)
+    - [x] [4.1. Databases, connection pools and ORMs][Step 4.1] (1 day)
+    - [x] [4.2. HTTP servers and clients][Step 4.2] (1 day)
+    - [x] [4.3. API servers, clients and tools][Step 4.3] (1 day)
 
 
 

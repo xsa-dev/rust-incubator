@@ -1,11 +1,15 @@
 use clap::{Parser, Subcommand};
-use rusqlite::{params, Connection, Result};
+use rusqlite::{Connection, Result, params};
 
 #[derive(Parser)]
-#[command(author, version, about = "Simple SQLite-backed CLI for users and roles")]
+#[command(
+    author,
+    version,
+    about = "Simple SQLite-backed CLI for users and roles"
+)]
 struct Cli {
     /// Path to the SQLite database file
-    #[arg(long, default_value = "roles.sqlite")] 
+    #[arg(long, default_value = "roles.sqlite")]
     database: String,
 
     #[command(subcommand)]
@@ -96,8 +100,16 @@ fn main() -> Result<()> {
     db.ensure_schema()?;
 
     match cli.command {
-        Command::CreateRole { slug, name, permissions } => db.create_role(&slug, &name, &permissions)?,
-        Command::UpdateRole { slug, name, permissions } => db.update_role(&slug, name, permissions)?,
+        Command::CreateRole {
+            slug,
+            name,
+            permissions,
+        } => db.create_role(&slug, &name, &permissions)?,
+        Command::UpdateRole {
+            slug,
+            name,
+            permissions,
+        } => db.update_role(&slug, name, permissions)?,
         Command::DeleteRole { slug } => db.delete_role(&slug)?,
         Command::ListRoles => db.list_roles()?,
         Command::GetRole { slug } => db.get_role(&slug)?,
@@ -163,7 +175,12 @@ impl Db {
         Ok(())
     }
 
-    fn update_role(&mut self, slug: &str, name: Option<String>, permissions: Option<String>) -> Result<()> {
+    fn update_role(
+        &mut self,
+        slug: &str,
+        name: Option<String>,
+        permissions: Option<String>,
+    ) -> Result<()> {
         let mut role = self.conn.query_row(
             "SELECT name, permissions FROM roles WHERE slug = ?1",
             params![slug],
@@ -193,7 +210,9 @@ impl Db {
             println!("Cannot delete role '{slug}' while it is assigned to users.");
             return Ok(());
         }
-        let deleted = self.conn.execute("DELETE FROM roles WHERE slug = ?1", params![slug])?;
+        let deleted = self
+            .conn
+            .execute("DELETE FROM roles WHERE slug = ?1", params![slug])?;
         if deleted == 0 {
             println!("Role '{slug}' not found.");
         } else {
@@ -203,9 +222,15 @@ impl Db {
     }
 
     fn list_roles(&mut self) -> Result<()> {
-        let mut stmt = self.conn.prepare("SELECT slug, name, permissions FROM roles ORDER BY slug")?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT slug, name, permissions FROM roles ORDER BY slug")?;
         let rows = stmt.query_map([], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?))
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
         })?;
         for row in rows {
             let (slug, name, perms) = row?;
@@ -218,7 +243,13 @@ impl Db {
         let role = self.conn.query_row(
             "SELECT slug, name, permissions FROM roles WHERE slug = ?1",
             params![slug],
-            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?)),
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            },
         );
         match role {
             Ok((slug, name, perms)) => println!("{slug}: {name} | permissions={perms}"),
@@ -240,7 +271,7 @@ impl Db {
     }
 
     fn update_user(&mut self, id: i64, name: Option<String>, email: Option<String>) -> Result<()> {
-        let mut user = self.conn.query_row(
+        let user = self.conn.query_row(
             "SELECT name, email FROM users WHERE id = ?1",
             params![id],
             |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
@@ -264,7 +295,9 @@ impl Db {
     }
 
     fn delete_user(&mut self, id: i64) -> Result<()> {
-        let deleted = self.conn.execute("DELETE FROM users WHERE id = ?1", params![id])?;
+        let deleted = self
+            .conn
+            .execute("DELETE FROM users WHERE id = ?1", params![id])?;
         if deleted == 0 {
             println!("User with id {id} not found.");
         } else {
@@ -308,12 +341,20 @@ impl Db {
     }
 
     fn list_users(&mut self) -> Result<()> {
-        let mut stmt = self.conn.prepare("SELECT id, name, email FROM users ORDER BY id")?;
-        let rows = stmt.query_map([], |row| {
-            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?))
-        })?;
-        for row in rows {
-            let (id, name, email) = row?;
+        let rows = {
+            let mut stmt = self
+                .conn
+                .prepare("SELECT id, name, email FROM users ORDER BY id")?;
+            stmt.query_map([], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()?
+        };
+        for (id, name, email) in rows {
             let roles = self.roles_for_user(id)?;
             println!("{id}: {name} <{email}> | roles={roles}");
         }
@@ -337,9 +378,9 @@ impl Db {
     }
 
     fn roles_for_user(&mut self, user_id: i64) -> Result<String> {
-        let mut stmt = self.conn.prepare(
-            "SELECT role_slug FROM users_roles WHERE user_id = ?1 ORDER BY role_slug",
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT role_slug FROM users_roles WHERE user_id = ?1 ORDER BY role_slug")?;
         let roles = stmt
             .query_map(params![user_id], |row| row.get::<_, String>(0))?
             .collect::<Result<Vec<_>, _>>()?;
@@ -367,6 +408,46 @@ impl Db {
         if exists == 0 {
             return Err(rusqlite::Error::QueryReturnedNoRows);
         }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn manages_users_and_roles() -> Result<()> {
+        let mut db = Db::new(":memory:")?;
+        db.ensure_schema()?;
+
+        db.create_role("admin", "Administrator", "[\"all\"]")?;
+        db.create_role("viewer", "Viewer", "[]")?;
+        db.create_user("Alice", "alice@example.com", "admin")?;
+
+        let alice_id: i64 =
+            db.conn
+                .query_row("SELECT id FROM users WHERE name = 'Alice'", [], |row| {
+                    row.get(0)
+                })?;
+
+        db.assign_role(alice_id, "viewer")?;
+        assert_eq!(db.roles_for_user(alice_id)?, "admin,viewer");
+
+        db.unassign_role(alice_id, "viewer")?;
+        assert_eq!(db.roles_for_user(alice_id)?, "admin");
+
+        db.unassign_role(alice_id, "admin")?;
+        assert_eq!(db.roles_for_user(alice_id)?, "admin");
+
+        db.delete_role("admin")?;
+        let remaining: i64 = db.conn.query_row(
+            "SELECT COUNT(*) FROM roles WHERE slug = 'admin'",
+            [],
+            |row| row.get(0),
+        )?;
+        assert_eq!(remaining, 1);
+
         Ok(())
     }
 }
