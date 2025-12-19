@@ -12,3 +12,4 @@ members = [
     "4_backend",
     "4_backend/4_*",
 ]
+resolver = "3"
