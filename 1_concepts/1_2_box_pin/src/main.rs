@@ -219,3 +219,29 @@ async fn main() {
     let result = future.await;
     println!("Future result: {}", result);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::pin::Pin;
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn measurable_future_returns_inner_result() {
+        let future = MeasurableFuture::new(async { 7u8 });
+        assert_eq!(future.await, 7);
+    }
+
+    #[test]
+    fn mutating_string_and_integer_through_pin() {
+        let mut text = String::from("hello");
+        Pin::new(&mut text).mut_me_somehow();
+        assert!(
+            text.contains("(mutated)"),
+            "String mutation should append the marker"
+        );
+
+        let mut number = 10i32;
+        Pin::new(&mut number).mut_me_somehow();
+        assert_eq!(number, 11);
+    }
+}
