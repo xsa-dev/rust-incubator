@@ -1,6 +1,4 @@
-fn main() {
-    println!("Implement me!");
-}
+fn main() {}
 
 const NOW: &str = "2019-06-26";
 
