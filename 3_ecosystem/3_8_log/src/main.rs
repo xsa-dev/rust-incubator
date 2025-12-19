@@ -6,11 +6,12 @@ use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 use tracing::{info, warn};
 use tracing_subscriber::field::Visit;
-use tracing_subscriber::filter::{FilterExt, filter_fn};
+use tracing_subscriber::filter::filter_fn;
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::{FmtContext, FormatEvent, FormatFields};
-use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::layer::{Layer, SubscriberExt};
 use tracing_subscriber::registry::LookupSpan;
+use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{EnvFilter, Registry, fmt};
 
 fn main() {
@@ -76,7 +77,7 @@ where
     fn format_event(
         &self,
         _ctx: &FmtContext<'_, S, N>,
-        writer: &mut Writer<'_>,
+        mut writer: Writer<'_>,
         event: &tracing::Event<'_>,
     ) -> std::fmt::Result {
         let mut visitor = JsonVisitor::default();
@@ -233,5 +234,95 @@ impl<'a> tracing_subscriber::fmt::writer::MakeWriter<'a> for AccessWriter {
         FileWriter {
             file: Arc::clone(&self.file),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::Value;
+    use std::io::Write;
+    use std::sync::{Arc, Mutex};
+    use tempfile::tempdir;
+    use time::{OffsetDateTime, format_description::well_known::Rfc3339};
+    use tracing::info;
+    use tracing_subscriber::Registry;
+    use tracing_subscriber::fmt::writer::MakeWriter;
+    use tracing_subscriber::layer::SubscriberExt;
+
+    #[derive(Clone)]
+    struct BufferWriterFactory {
+        buffer: Arc<Mutex<Vec<u8>>>,
+    }
+
+    struct BufferWriter {
+        buffer: Arc<Mutex<Vec<u8>>>,
+    }
+
+    impl<'a> MakeWriter<'a> for BufferWriterFactory {
+        type Writer = BufferWriter;
+
+        fn make_writer(&'a self) -> Self::Writer {
+            BufferWriter {
+                buffer: Arc::clone(&self.buffer),
+            }
+        }
+    }
+
+    impl Write for BufferWriter {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            let mut guard = self.buffer.lock().expect("poisoned buffer lock");
+            guard.write(buf)
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            let mut guard = self.buffer.lock().expect("poisoned buffer lock");
+            guard.flush()
+        }
+    }
+
+    #[test]
+    fn json_formatter_writes_expected_fields() {
+        let buffer = Arc::new(Mutex::new(Vec::new()));
+        let subscriber = Registry::default().with(
+            fmt::layer()
+                .event_format(JsonFormatter::new("app.log"))
+                .with_writer(BufferWriterFactory {
+                    buffer: Arc::clone(&buffer),
+                }),
+        );
+
+        tracing::subscriber::with_default(subscriber, || {
+            info!(target: "app", user_id = 42, "hello json");
+        });
+
+        let contents = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
+        let json: Value = serde_json::from_str(contents.trim()).expect("valid JSON output");
+
+        assert_eq!(json.get("lvl").and_then(Value::as_str), Some("INFO"));
+        assert_eq!(json.get("file").and_then(Value::as_str), Some("app.log"));
+        assert_eq!(json.get("msg").and_then(Value::as_str), Some("hello json"));
+        assert_eq!(json.get("user_id").and_then(Value::as_i64), Some(42));
+
+        let timestamp = json
+            .get("time")
+            .and_then(Value::as_str)
+            .expect("time field present");
+        OffsetDateTime::parse(timestamp, &Rfc3339).expect("RFC3339 timestamp");
+    }
+
+    #[test]
+    fn access_writer_appends_to_file() {
+        let dir = tempdir().expect("temporary directory");
+        let log_path = dir.path().join("access.log");
+        let log_path_str = log_path.to_str().expect("utf-8 path");
+        let writer = AccessWriter::new(log_path_str).expect("log file created");
+
+        writeln!(&mut writer.make_writer(), "first line").expect("write first line");
+        writeln!(&mut writer.make_writer(), "second line").expect("write second line");
+
+        let contents = std::fs::read_to_string(&log_path).expect("read log file");
+        assert!(contents.contains("first line"));
+        assert!(contents.contains("second line"));
     }
 }
