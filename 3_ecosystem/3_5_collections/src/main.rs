@@ -45,11 +45,15 @@ impl UsersRepository for ImUsersRepository {
 
     fn search_by_nickname(&self, query: &str) -> Vec<u64> {
         let query = query.to_lowercase();
-        self.users
+        let mut ids: Vec<u64> = self
+            .users
             .values()
             .filter(|user| user.nickname.to_lowercase().contains(&query))
             .map(|user| user.id)
-            .collect()
+            .collect();
+
+        ids.sort_unstable();
+        ids
     }
 }
 

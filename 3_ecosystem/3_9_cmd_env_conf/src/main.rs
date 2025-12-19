@@ -326,3 +326,170 @@ fn main() -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serial_test::serial;
+    use std::env;
+    use std::io::Write;
+    use tempfile::Builder;
+
+    fn clear_conf_env() {
+        for key in [
+            "CONF__MODE__DEBUG",
+            "CONF__SERVER__EXTERNAL_URL",
+            "CONF__SERVER__HTTP_PORT",
+            "CONF__SERVER__GRPC_PORT",
+            "CONF__SERVER__HEALTHZ_PORT",
+            "CONF__SERVER__METRICS_PORT",
+            "CONF__DB__MYSQL__HOST",
+            "CONF__DB__MYSQL__PORT",
+            "CONF__DB__MYSQL__DATABASE",
+            "CONF__DB__MYSQL__USER",
+            "CONF__DB__MYSQL__PASS",
+            "CONF__DB__MYSQL__CONNECTIONS__MAX_IDLE",
+            "CONF__DB__MYSQL__CONNECTIONS__MAX_OPEN",
+            "CONF__LOG__APP__LEVEL",
+            "CONF__BACKGROUND__WATCHDOG__PERIOD",
+            "CONF__BACKGROUND__WATCHDOG__LIMIT",
+            "CONF__BACKGROUND__WATCHDOG__LOCK_TIMEOUT",
+        ] {
+            // Safety: tests using this helper are serialized, so environment mutation is isolated.
+            unsafe { env::remove_var(key) };
+        }
+    }
+
+    fn cli_with_conf(path: impl Into<PathBuf>) -> Cli {
+        Cli {
+            conf: path.into(),
+            debug: false,
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn uses_defaults_when_no_sources_present() {
+        clear_conf_env();
+        let cli = cli_with_conf("nonexistent.toml");
+
+        let config = load_config(&cli).expect("config should be loaded with defaults");
+
+        assert_eq!(config.mode.debug, default_debug());
+        assert_eq!(config.server.external_url, default_external_url());
+        assert_eq!(config.server.http_port, default_http_port());
+        assert_eq!(config.server.grpc_port, default_grpc_port());
+        assert_eq!(config.server.healthz_port, default_healthz_port());
+        assert_eq!(config.server.metrics_port, default_metrics_port());
+        assert_eq!(config.db.mysql.host, default_mysql_host());
+        assert_eq!(config.db.mysql.port, default_mysql_port());
+        assert_eq!(config.db.mysql.database, default_mysql_database());
+        assert_eq!(config.db.mysql.user, default_mysql_user());
+        assert_eq!(config.db.mysql.pass, default_mysql_pass());
+        assert_eq!(
+            config.db.mysql.connections.max_idle,
+            default_connections_max_idle()
+        );
+        assert_eq!(
+            config.db.mysql.connections.max_open,
+            default_connections_max_open()
+        );
+        assert_eq!(config.log.app.level, default_log_level());
+        assert_eq!(config.background.watchdog.period, default_watchdog_period());
+        assert_eq!(config.background.watchdog.limit, default_watchdog_limit());
+        assert_eq!(
+            config.background.watchdog.lock_timeout,
+            default_watchdog_lock_timeout()
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn merges_values_from_file() {
+        clear_conf_env();
+        let mut file = Builder::new()
+            .suffix(".toml")
+            .tempfile()
+            .expect("temporary config file");
+        writeln!(
+            &mut file,
+            r#"
+                [mode]
+                debug = true
+
+                [server]
+                http_port = 9090
+                external_url = "https://example.com"
+
+                [db.mysql]
+                host = "db.example.com"
+                port = 4406
+                database = "prod"
+                user = "reader"
+                pass = "secret"
+                [db.mysql.connections]
+                max_idle = 10
+                max_open = 20
+
+                [log.app]
+                level = "debug"
+
+                [background.watchdog]
+                period = "30s"
+                limit = 5
+                lock_timeout = "15s"
+            "#
+        )
+        .expect("write config");
+        file.flush().expect("flush config");
+
+        let cli = cli_with_conf(file.path());
+        let config = load_config(&cli).expect("config merged");
+
+        assert_eq!(
+            config.mode.debug,
+            default_debug(),
+            "CLI flag overrides file"
+        );
+        assert_eq!(config.server.http_port, 9090);
+        assert_eq!(config.server.external_url, "https://example.com");
+        assert_eq!(config.db.mysql.host, "db.example.com");
+        assert_eq!(config.db.mysql.port, 4406);
+        assert_eq!(config.db.mysql.database, "prod");
+        assert_eq!(config.db.mysql.user, "reader");
+        assert_eq!(config.db.mysql.pass, "secret");
+        assert_eq!(config.db.mysql.connections.max_idle, 10);
+        assert_eq!(config.db.mysql.connections.max_open, 20);
+        assert_eq!(config.log.app.level, "debug");
+        assert_eq!(config.background.watchdog.period, Duration::from_secs(30));
+        assert_eq!(config.background.watchdog.limit, 5);
+        assert_eq!(
+            config.background.watchdog.lock_timeout,
+            Duration::from_secs(15)
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn env_and_cli_override_file_and_defaults() {
+        clear_conf_env();
+        // Safety: the test suite is serialized via `serial_test`, so no other threads mutate env.
+        unsafe {
+            env::set_var("CONF__SERVER__HTTP_PORT", "5050");
+            env::set_var("CONF__BACKGROUND__WATCHDOG__PERIOD", "45s");
+            env::set_var("CONF__MODE__DEBUG", "false");
+        }
+
+        let cli = Cli {
+            conf: PathBuf::from("nonexistent.toml"),
+            debug: true,
+        };
+
+        let config = load_config(&cli).expect("config loaded with overrides");
+
+        assert_eq!(config.server.http_port, 5050);
+        assert_eq!(config.background.watchdog.period, Duration::from_secs(45));
+        assert!(config.mode.debug, "CLI flag overrides env var");
+        clear_conf_env();
+    }
+}

@@ -78,19 +78,8 @@ pub fn select_rand_val<T>(values: &[T]) -> Option<&T> {
 pub fn new_access_token() -> String {
     const TOKEN_LEN: usize = 64;
     let mut rng = OsRng;
-    (0..TOKEN_LEN)
-        .map(|_| rng.sample(Alphanumeric) as char)
-        .map(|c| match c {
-            '0'..='9' | 'A'..='Z' | 'a'..='z' => c,
-            _ => {
-                // Alphanumeric already guarantees ASCII digits and letters, but match keeps
-                // us honest when the enum extends in the future.
-                let allowed: &[u8] =
-                    b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-                let idx = rng.gen_range(0..allowed.len());
-                allowed[idx] as char
-            }
-        })
+    std::iter::repeat_with(|| rng.sample(Alphanumeric) as char)
+        .take(TOKEN_LEN)
         .collect()
 }
 
